@@ -1,6 +1,3 @@
-const SIZE = 13;
-const NUMBER_OF_BOMBS = 18
-
 class MineSweeper {
   /**
    * @typedef {Object} Cell
@@ -11,26 +8,39 @@ class MineSweeper {
    */
 
   constructor(width, height, numberOfBombs, context) {
-    this.isPlaying = true;
     this.context = context;
     this.width = width;
     this.height = height;
     this.numberOfBombs = numberOfBombs;
-    this.cells = [];
-    this.cellBombs = [];
+    this.gameNotEnded;
+    this.started;
+    this.cells;
+    this.cellBombs;
     this.rowStyleClasses = ['flex', 'h-10'];
     this.cellStyleClasses = ['w-10', 'border', 'bg-gray-400', 'text-center'];
+    this.NumberOfFlags;
+    this.timer;
+    this.timerInterval;
+    this.dashBoard = {};
     this.init();
-    this.initContext();
-    this.initCells();
   }
 
   init() {
-    const cells = new Array(this.width);
+    this.gameNotEnded = true;
+    this.started = false;
+    this.NumberOfFlags = 0;
+    this.timer = 0;
+    this.cellBombs = [];
+    this.dashBoard = {};
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+    }
+    this.timerInterval = null;
+    const cells = new Array(this.height);
     this.cells = cells;
-    for (let i = 0; i < this.width; i++) {
-      cells[i] = new Array(this.height);
-      for (let j = 0; j < this.height; j++) {
+    for (let i = 0; i < this.height; i++) {
+      cells[i] = new Array(this.width);
+      for (let j = 0; j < this.width; j++) {
         cells[i][j] = { bomb: false, checked: false, state: "NOT_PLAYED", bombsCount: 0, row: i, col: j }
       }
     }
@@ -48,6 +58,10 @@ class MineSweeper {
       for (const neighborCell of this.getNeighbors(cell))
         neighborCell.bombsCount++;
     }
+
+    this.initContext();
+    this.initDashBoard();
+    this.initCells();
   }
 
   initContext() {
@@ -58,42 +72,84 @@ class MineSweeper {
     })
   }
 
-  restartGame(width, height, bombsNumber) {
-    this.width = width;
-    this.height = height;
-    this.bombsNumber = bombsNumber;
-    this.cells = [];
-    this.cellBombs = [];
-    this.isPlaying = true;
+  initDashBoard() {
+    this.dashBoard = {};
+    const dashBoard = document.createElement('div');
+    const control = document.createElement('div');
+    control.classList.add('flex', 'justify-between', 'w-full');
+    const widthInput = document.createElement('input');
+    widthInput.setAttribute('type', 'number');
+    widthInput.placeholder = 'Width';
+    const heightInput = document.createElement('input');
+    heightInput.setAttribute('type', 'number');
+    heightInput.placeholder = 'Height';
+    const bombsInput = document.createElement('input');
+    bombsInput.setAttribute('type', 'number');
+    bombsInput.placeholder = 'number of bombs';
+
+    const info = document.createElement('div');
+    const remainingBombs = document.createElement('div');
+    remainingBombs.innerHTML = this.numberOfBombs;
+    const restartButton = document.createElement('button');
+    restartButton.textContent = 'Restart';
+    const timer = document.createElement('div');
+    timer.innerHTML = 0;
+
+    restartButton.addEventListener('click', () => this.restartGame());
+
+    info.classList.add('flex', 'justify-between', 'w-full');
+    info.append(remainingBombs, restartButton, timer);
+
+    control.append(widthInput, heightInput, bombsInput);
+    dashBoard.append(control, info);
+    this.context.prepend(dashBoard);
+
+    this.dashBoard.root = dashBoard;
+    this.dashBoard.control = control;
+    this.dashBoard.widthInput = widthInput;
+    this.dashBoard.heightInput = heightInput;
+    this.dashBoard.bombsInput = bombsInput;
+    this.dashBoard.info = info;
+    this.dashBoard.remainingBombs = remainingBombs;
+    this.dashBoard.restartButton = restartButton;
+    this.dashBoard.timer = timer;
+  }
+
+  restartGame() {
+    if (this.dashBoard.widthInput.value && this.dashBoard.heightInput.value && this.dashBoard.bombsInput.value) {
+      this.width = parseInt(this.dashBoard.widthInput.value);
+      this.height = parseInt(this.dashBoard.heightInput.value);
+      this.numberOfBombs = parseInt(this.dashBoard.bombsInput.value);
+    }
     this.init();
-    this.initContext();
-    this.initCells();
   }
 
   randomxy() {
-    const x = Math.floor(Math.random() * this.width);
-    const y = Math.floor(Math.random() * this.height);
+    const x = Math.floor(Math.random() * this.height);
+    const y = Math.floor(Math.random() * this.width);
     return [x, y];
   }
 
   getNeighbors(cell) {
-    const d = [-1, 0, 1]
+    const offSets = [-1, 0, 1]
     const neighbors = []
-    for (let di of d) {
-      for (let dj of d) {
-        const x = cell.row + di;
-        const y = cell.col + dj;
-        if (x < 0 || x >= this.width || y < 0 || y >= this.height) continue;
+
+    for (let dx of offSets) {
+      for (let dy of offSets) {
+        const x = cell.row + dx;
+        const y = cell.col + dy;
+
+        if (x < 0 || x >= this.height || y < 0 || y >= this.width || dx === 0 && dy === 0) continue;
         neighbors.push(this.cells[x][y])
       }
     }
+
     return neighbors;
   }
 
   newRow() {
     const row = document.createElement('div');
-    //TODO: row.classList.add(...this.rowStyleClasses);
-    this.rowStyleClasses.forEach((cssClass) => row.classList.add(cssClass));
+    row.classList.add(...this.rowStyleClasses);
     this.context.appendChild(row);
     return row;
   }
@@ -106,8 +162,6 @@ class MineSweeper {
   }
 
   handleRightClick(cell) {
-    console.log("right mouse button");
-    console.log(cell.state);
     switch (cell.state) {
       case "PLAYED":
       case "REVEALED":
@@ -124,13 +178,9 @@ class MineSweeper {
   }
 
   handleLeftClick(cell) {
-    console.log("left mouse button");
-    if (cell.state === 'PLAYED' || cell.state === 'REAVELED')
-      return;
     cell.state = 'PLAYED';
     if (cell.bomb) {
-      this.isPlaying = false;
-      console.log('boom');
+      this.endGame();
       return;
     }
     this.markEmptyCell(cell);
@@ -142,11 +192,15 @@ class MineSweeper {
   flagCell(cell) {
     cell.element.innerHTML = 'f';
     cell.state = 'FLAGED';
+    this.NumberOfFlags++;
+    this.dashBoard.remainingBombs.innerHTML = this.numberOfBombs - this.NumberOfFlags;
   }
 
   unflagCell(cell) {
     cell.element.innerHTML = '';
     cell.state = 'NOT_PLAYED';
+    this.NumberOfFlags--;
+    this.dashBoard.remainingBombs.innerHTML = this.numberOfBombs - this.NumberOfFlags;
   }
 
   /**
@@ -155,8 +209,13 @@ class MineSweeper {
    * @param {Cell} cell - The cell object representing the clicked cell.
    */
   handleClick(e, cell) {
-    if (!this.isPlaying || cell.state === 'PLAYED' || cell.state === 'REVEALED') {
+    if (!this.gameNotEnded || cell.state === 'PLAYED' || cell.state === 'REVEALED') {
       return;
+    }
+
+    if (!this.started) {
+      this.started = true;
+      this.startTimer();
     }
 
     switch (e.button) {
@@ -173,9 +232,9 @@ class MineSweeper {
   }
 
   initCells() {
-    for (let i = 0; i < this.width; i++) {
+    for (let i = 0; i < this.height; i++) {
       const row = this.newRow();
-      for (let j = 0; j < this.height; j++) {
+      for (let j = 0; j < this.width; j++) {
         const cell = this.cells[i][j];
         const cellElement = this.newCell(row);
         cell.element = cellElement;
@@ -205,147 +264,36 @@ class MineSweeper {
       }
     }
   }
+
+  endGame() {
+    this.gameNotEnded = false;
+    this.revealBombs();
+  }
+
+  revealBombs() {
+    for (let cell of this.cellBombs) {
+      cell.element.innerHTML = 'B';
+      cell.element.className = 'w-10 border bg-red-500 text-center'
+    }
+  }
+
+  startTimer() {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+    }
+    this.timerInterval = setInterval(() => {
+      this.timer++;
+      this.dashBoard.timer.innerHTML = this.timer;
+    }, 1000);
+  }
 }
 
-// let isPlaying = true;
 
-// function newCells(size, bombsNumber) {
-//   const cells = new Array(size);
-//   const bombs = [];
-//   for (let i = 0; i < size; i++) {
-//     cells[i] = new Array(size);
-//     for (let j = 0; j < size; j++) {
-//       cells[i][j] = { bomb: false, checked: false, bombsCount: 0 }
-//     }
-//   }
+const SIZE = 10;
+const NUMBER_OF_BOMBS = 11
 
-//   for (let i = 0; i < bombsNumber; i++) {
-//     let [x, y] = randomxy();
-//     while(cells[x][y].bomb)
-//       [x, y] = randomxy();
-//     cells[x][y].bomb = true;
-//     bombs.push([x, y])
-//   }
+let width = SIZE;
+let height = SIZE;
+let bombs = NUMBER_OF_BOMBS;
 
-//   const d = [-1, 0, 1]
-//   for (let [i, j] of bombs) {
-//     for (const [x, y] of getNeighbors(i, j))
-//       cells[x][y].bombsCount++;
-//   }
-
-//   function randomxy() {
-//     const x = Math.floor(Math.random() * size);
-//     const y = Math.floor(Math.random() * size);
-//     return [x, y];
-//   }
-
-//   return [cells, bombs];
-// }
-
-// let [cells, bombs] = newCells(SIZE, NUMBER_OF_BOMBS);
-
-// const app = document.getElementById("app");
-// app.addEventListener('contextmenu', (e) => {
-//   e.preventDefault();
-// })
-
-// function initGame() {
-//   [cells, bombs] = newCells(SIZE, NUMBER_OF_BOMBS);
-//   isPlaying = true;
-//   while (app.firstChild)
-//     app.removeChild(app.firstChild);
-
-//   for (let i = 0; i < SIZE; i++) {
-//     const row = document.createElement('div');
-//     row.classList.add('flex', 'h-10');
-//     app.appendChild(row);
-//     for (let j = 0; j < SIZE; j++) {
-//       const cell = cells[i][j];
-//       const cellElement = document.createElement('div');
-//       cellElement.className = 'w-10 border bg-gray-400 text-center'
-//       cell.element = cellElement;
-//       let flaged = false;
-//       cellElement.addEventListener('mouseup', (e) => {
-//         if (!isPlaying) return;
-//         switch (e.button) {
-//           case 0:
-//             console.log("left mouse button");
-//             if (cell.bomb) {
-//               isPlaying = false;
-//               console.log('boom');
-//             } else {
-//               markEmptyCell(cell);
-//               if (cell.bombsCount === 0) {
-//                 expandSafeCells(i, j);
-//               }
-//             }
-//             break;
-//           case 1:
-//             console.log("middle mouse button");
-//             break;
-//           case 2:
-//             console.log("right mouse button");
-//             if (!flaged) {
-//               cellElement.innerHTML = 'f';
-//               flaged = true;
-//             }
-//             else {
-//               cellElement.innerHTML = '';
-//               flaged = false;
-//             }
-//             break;
-//         }
-//       })
-//       row.appendChild(cellElement);
-//     }
-//   }
-// }
-
-
-// function markEmptyCell(cell) {
-//   if (cell.bombsCount > 0) {
-//     cell.element.className = 'w-10 border bg-gray-300 text-center'
-//     cell.element.innerHTML = cell.bombsCount;
-//   } else {
-//     cell.element.className = 'w-10 border bg-gray-200 text-center'
-//   }
-// }
-
-// function expandSafeCells(i, j) {
-//   cells[i][j].checked = true;
-//   const neighbors = getNeighbors(i, j);
-//   for (let [x, y] of neighbors) {
-//     const cell = cells[x][y];
-//     markEmptyCell(cell);
-//     if (cell.bombsCount === 0 && !cell.checked) {
-//       cell.checked = true;
-//       expandSafeCells(x, y);
-//     }
-//   }
-// }
-
-// function getNeighbors(i, j) {
-//   const d = [-1, 0, 1]
-//   const neighbors = []
-//   for (let di of d) {
-//     for (let dj of d) {
-//       const x = i + di;
-//       const y = j + dj;
-//       if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) continue;
-//       neighbors.push([x, y])
-//     }
-//   }
-//   return neighbors;
-// }
-
-// let [cells, bombs] = newCells(SIZE, NUMBER_OF_BOMBS);
-
-const app = document.getElementById("app");
-
-let game = new MineSweeper(SIZE, SIZE, NUMBER_OF_BOMBS, app);
-
-document.getElementById("restart").addEventListener('click', () => {
-  game = new MineSweeper(SIZE, SIZE, NUMBER_OF_BOMBS, app);
-});
-// document.getElementById("restart").addEventListener('click', initGame);
-// initGame();
+let game = new MineSweeper(width, height, bombs, app);
