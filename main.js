@@ -12,8 +12,7 @@ class MineSweeper {
     this.width = width;
     this.height = height;
     this.numberOfBombs = numberOfBombs;
-    this.gameNotEnded;
-    this.started;
+    this.state;
     this.cells;
     this.cellBombs;
     this.rowStyleClasses = ['flex', 'h-10'];
@@ -21,17 +20,18 @@ class MineSweeper {
     this.NumberOfFlags;
     this.timer;
     this.timerInterval;
+    this.playedCells;
     this.dashBoard = {};
     this.init();
   }
 
   init() {
-    this.gameNotEnded = true;
-    this.started = false;
+    this.state = 'NOT_STARTED';
     this.NumberOfFlags = 0;
     this.timer = 0;
     this.cellBombs = [];
     this.dashBoard = {};
+    this.playedCells = 0;
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
     }
@@ -76,7 +76,7 @@ class MineSweeper {
     this.dashBoard = {};
     const dashBoard = document.createElement('div');
     const control = document.createElement('div');
-    control.classList.add('flex', 'justify-between', 'w-full');
+    control.classList.add('flex', 'justify-between', 'items-center', 'w-full', 'p-2', 'bg-gray-200', 'mt-2');
     const widthInput = document.createElement('input');
     widthInput.setAttribute('type', 'number');
     widthInput.placeholder = 'Width';
@@ -92,16 +92,20 @@ class MineSweeper {
     remainingBombs.innerHTML = this.numberOfBombs;
     const restartButton = document.createElement('button');
     restartButton.textContent = 'Restart';
+    restartButton.classList.add('bg-blue-500', 'hover:bg-blue-700', 'text-white', 'font-bold', 'py-2', 'px-4', 'rounded');
     const timer = document.createElement('div');
     timer.innerHTML = 0;
 
     restartButton.addEventListener('click', () => this.restartGame());
 
-    info.classList.add('flex', 'justify-between', 'w-full');
+    const gameStatus = document.createElement('div');
+    gameStatus.classList.add('font-extrabold', 'text-center', 'text-3xl', 'w-full');
+
+    info.classList.add('flex', 'justify-between', 'items-center', 'w-full', 'p-2', 'bg-gray-200', 'mt-2');
     info.append(remainingBombs, restartButton, timer);
 
     control.append(widthInput, heightInput, bombsInput);
-    dashBoard.append(control, info);
+    dashBoard.append(gameStatus, control, info);
     this.context.prepend(dashBoard);
 
     this.dashBoard.root = dashBoard;
@@ -113,6 +117,7 @@ class MineSweeper {
     this.dashBoard.remainingBombs = remainingBombs;
     this.dashBoard.restartButton = restartButton;
     this.dashBoard.timer = timer;
+    this.dashBoard.gameStatus = gameStatus;
   }
 
   restartGame() {
@@ -184,8 +189,14 @@ class MineSweeper {
       return;
     }
     this.markEmptyCell(cell);
+    this.playedCells++;
     if (cell.bombsCount === 0) {
       this.expandSafeCells(cell);
+    }
+    if (this.playedCells === this.width * this.height - this.numberOfBombs) {
+      this.state = 'WON';
+      clearInterval(this.timerInterval);
+      this.dashBoard.gameStatus.innerHTML = 'You won!';
     }
   }
 
@@ -203,18 +214,22 @@ class MineSweeper {
     this.dashBoard.remainingBombs.innerHTML = this.numberOfBombs - this.NumberOfFlags;
   }
 
+  isPlaying() {
+    return this.state === 'STARTED' || this.state === 'NOT_STARTED';
+  }
+
   /**
    * Handles the click event on a cell.
    * @param {Event} e - The click event object.
    * @param {Cell} cell - The cell object representing the clicked cell.
    */
   handleClick(e, cell) {
-    if (!this.gameNotEnded || cell.state === 'PLAYED' || cell.state === 'REVEALED') {
+    if (!this.isPlaying() || cell.state === 'PLAYED' || cell.state === 'REVEALED') {
       return;
     }
 
-    if (!this.started) {
-      this.started = true;
+    if (this.state === 'NOT_STARTED') {
+      this.state = 'STARTED';
       this.startTimer();
     }
 
@@ -255,6 +270,7 @@ class MineSweeper {
   expandSafeCells(cell) {
     for (let neighborCell of this.getNeighbors(cell)) {
       this.markEmptyCell(neighborCell);
+      this.playedCells++;
       if (neighborCell.bombsCount === 0 && 
         (neighborCell.state === 'FLAGED' || neighborCell.state === 'NOT_PLAYED')) {
         neighborCell.state = 'REVEALED';
@@ -266,8 +282,11 @@ class MineSweeper {
   }
 
   endGame() {
-    this.gameNotEnded = false;
+    this.state = 'LOST';
     this.revealBombs();
+    clearInterval(this.timerInterval);
+    this.timerInterval = null;
+    this.dashBoard.gameStatus.innerHTML = 'You lost!';
   }
 
   revealBombs() {
